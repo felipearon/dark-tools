@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Legendas SRT</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: bold;
+            color: #555;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            font-size: 14px;
+            margin-bottom: 20px;
+            height: 150px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #downloadBtn {
+            background-color: #28a745;
+            display: none;
+        }
+
+        #downloadBtn:hover {
+            background-color: #218838;
+        }
+
+        #resultado {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Conversor de Texto para SRT</h1>
+        <form id="conversorForm">
+            <label for="textoInput">Insira o texto:</label>
+            <textarea id="textoInput" placeholder="Digite seu texto aqui..."></textarea>
+            <button type="submit">Gerar SRT</button>
+            <button id="downloadBtn">Baixar SRT</button>
+        </form>
+        <pre id="resultado"></pre>
+    </div>
+
+    <script>
+        (function() {
+            const CARACTERES_POR_BLOCO = 500;
+            const PALAVRAS_MIN_BLOCO = 80;
+            const PALAVRAS_MAX_BLOCO = 100;
+            const DURACAO_BLOCO = 30;
+            const INTERVALO_ENTRE_BLOCOS = 5;
+
+            function converterParaSRT(texto) {
+                let srt = '';
+                let contador = 1;
+                let tempoAcumulado = 0;
+                let palavras = texto.split(/\s+/);
+                let blocoAtual = '';
+                let palavrasNoBloco = 0;
+
+                for (let palavra of palavras) {
+                    if (blocoAtual.length + palavra.length <= CARACTERES_POR_BLOCO && palavrasNoBloco < PALAVRAS_MAX_BLOCO) {
+                        blocoAtual += palavra + ' ';
+                        palavrasNoBloco++;
+                    } else {
+                        let ultimoPontoFinal = blocoAtual.lastIndexOf('.');
+                        if (ultimoPontoFinal !== -1 && ultimoPontoFinal !== blocoAtual.length - 1 && palavrasNoBloco >= PALAVRAS_MIN_BLOCO) {
+                            let resto = blocoAtual.substring(ultimoPontoFinal + 1);
+                            blocoAtual = blocoAtual.substring(0, ultimoPontoFinal + 1);
+                            srt += formatarBlocoSRT(contador, tempoAcumulado, blocoAtual);
+                            contador++;
+                            tempoAcumulado += DURACAO_BLOCO + INTERVALO_ENTRE_BLOCOS;
+                            blocoAtual = resto + palavra + ' ';
+                            palavrasNoBloco = resto.split(/\s+/).length + 1;
+                        } else {
+                            srt += formatarBlocoSRT(contador, tempoAcumulado, blocoAtual);
+                            contador++;
+                            tempoAcumulado += DURACAO_BLOCO + INTERVALO_ENTRE_BLOCOS;
+                            blocoAtual = palavra + ' ';
+                            palavrasNoBloco = 1;
+                        }
+                    }
+                }
+
+                if (blocoAtual) {
+                    srt += formatarBlocoSRT(contador, tempoAcumulado, blocoAtual);
+                }
+
+                return srt.trim();
+            }
+
+            function formatarBlocoSRT(contador, tempoInicio, texto) {
+                const tempoFim = tempoInicio + DURACAO_BLOCO;
+                return `${contador}\n${formatarTempo(tempoInicio)} --> ${formatarTempo(tempoFim)}\n${texto.trim()}\n\n`;
+            }
+
+            function formatarTempo(segundos) {
+                const horas = Math.floor(segundos / 3600);
+                const minutos = Math.floor((segundos % 3600) / 60);
+                const segsRestantes = Math.floor(segundos % 60);
+                const milissegundos = Math.floor((segundos % 1) * 1000);
+
+                return `${pad(horas)}:${pad(minutos)}:${pad(segsRestantes)},${pad(milissegundos, 3)}`;
+            }
+
+            function pad(numero, tamanho = 2) {
+                return numero.toString().padStart(tamanho, '0');
+            }
+
+            function downloadSRT(conteudo) {
+                const blob = new Blob([conteudo], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'legendas.srt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            document.getElementById('conversorForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const texto = document.getElementById('textoInput').value;
+                
+                if (texto.trim() === '') {
+                    alert('Por favor, insira algum texto para converter.');
+                    return;
+                }
+                
+                const srt = converterParaSRT(texto);
+                document.getElementById('resultado').textContent = srt;
+                document.getElementById('downloadBtn').style.display = 'inline';
+            });
+
+            document.getElementById('downloadBtn').addEventListener('click', function() {
+                const srt = document.getElementById('resultado').textContent;
+                downloadSRT(srt);
+            });
+        })();
+    </script>
+</body>
+</html>
